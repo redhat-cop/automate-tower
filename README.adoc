@@ -1,0 +1,5 @@
+= Automating Ansible Tower
+
+This repository will contain code to automate Tower itself, we'll automate the automation.
+
+Stay tuned...
