@@ -1,0 +1,310 @@
+= Tower CLI desired state examples
+Eric Lavarde <elavarde@redhat.com>
+v0.5, 2018-07-24
+:toc:
+
+== Introduction ==
+
+The command line tool https://github.com/ansible/tower-cli[tower-cli] is a simpler way to configure Tower (or AWX) than by programming the API and a more repeatable way than by clicking through the WebUI. It is relatively easy to use and discover using repetitively the `--help` option at each level of the sub-commands, but it can take some time until you've got all options right and it has some quirks here and there as well.
+
+This paper is here to explain the most generic use cases with examples, focussing on the idempotent creation of resources in a desired state way, i.e. based on the examples given you can easily create a shell script (or a playbook) that can be called again and again, and the result will be the same unless you modify the script, in which case the result will be adapted wherever required.
+
+WARNING: tower-cli isn't supported by Red Hat but, as it uses only the official REST API of Tower and doesn't do any "trick", the resulting structures themselves are perfectly valid.
+
+
+== Generic considerations ==
+
+A few generic remarks before we start with the core of the paper:
+
+. We assume that you're familiar with the Tower/AWX concepts and only explain the parameters which might offer surprises.
+. `tower-cli <object> create --force-on-exists` is the same as `tower-cli modify <object> --create-on-missing` and makes sure that the command is idempotent. You'll notice that if changes are required, the output is yellow, whereas it's green if nothing needed to be modified.
+. The option `--description` respectively `-d` is available for almost all objects but is also always optional, so we're ignoring it here for simplicity reasons.
+
+WARNING: we assume in the following lines no blanks and no special characters in the shell variables, hence there are no quotes around them, for readability reasons. Actually, there are even environment variables in single quotes in the following examples, something which doesn\'t work in the real world so pay attention when adapting!
+
+== Authentication ==
+
+We're assuming that tower-cli has been properly installed using the http://tower-cli.readthedocs.io/en/latest/install.html[official instructions] or preferably the package manager of your platform (e.g. `sudo yum install python2-ansible-tower-cli` on RHEL 7 respectively `sudo dnf install python2-ansible-tower-cli` on Fedora).
+
+The `tower-cli` tool must be able to authenticate, generally using one of 3 main methods:
+
+. Create the file `~/.tower_cli.cfg` with a content like the following (assuming you're calling tower-cli on the Tower server itself):
++
+------------------------------------------------------------------------
+[general]
+host = localhost
+username = admin
+password = redhat
+------------------------------------------------------------------------
++
+. Set and export the environment variables `TOWER_USERNAME`, `TOWER_HOST` and `TOWER_PASSWORD`.
+. Give the necessary parameters on the command line: `--tower-password`, `--tower-username` and `--tower-host`.
+
+You'll know that the authentication works if you can call `tower-cli version` without getting the error message `Error: Invalid Tower authentication credentials.`.
+
+== Create an organization ==
+
+That's the first step in all cases:
+
+------------------------------------------------------------------------
+tower-cli organization create -n ${TOWER_ORG_NAME} --force-on-exists
+------------------------------------------------------------------------
+
+== Users and Teams ==
+
+=== Create a team ===
+
+As the title says:
+
+------------------------------------------------------------------------
+tower-cli team create -n ${TOWER_TEAM_NAME} \
+        --organization ${TOWER_ORG_NAME} \
+        --force-on-exists
+------------------------------------------------------------------------
+
+=== Create a user ===
+
+We create a normal user and assign it to a team:
+
+------------------------------------------------------------------------
+tower-cli user create --username ${TOWER_USER_NAME} \
+	--password ${TOWER_USER_PASSWORD} --email ${TOWER_USER_EMAIL} \
+	--first-name ${TOWER_USER_FIRST} --last-name ${TOWER_USER_LAST} \
+	--force-on-exists --is-superuser False --is-system-auditor False
+
+tower-cli team associate --team ${TOWER_TEAM_NAME} --user ${TOWER_USER_NAME}
+------------------------------------------------------------------------
+
+=== Create an organization admin or auditor ===
+
+Not really more complicated, we just need to assign the corresponding rights to our newly created user:
+
+------------------------------------------------------------------------
+tower-cli user create --username ${TOWER_USER_NAME} \
+	--password ${TOWER_USER_PASSWORD} --email ${TOWER_USER_EMAIL} \
+	--first-name ${TOWER_USER_FIRST} --last-name ${TOWER_USER_LAST} \
+	--force-on-exists --is-superuser False --is-system-auditor False
+tower-cli role grant --type admin --user ${TOWER_USER_NAME} \
+	--organization ${TOWER_ORG_NAME}
+tower-cli role grant --type auditor --user ${TOWER_USER_NAME} \
+	--organization ${TOWER_ORG_NAME}
+------------------------------------------------------------------------
+
+
+== Credential types and Credentials ==
+
+=== Create Machine credentials ===
+
+The Tower RSA file contains a private SSH key and the strange YAML construct is required so that the line breaks are respected (it doesn't work using JSON, the lines are then folded and Tower complains about a wrong format):
+
+------------------------------------------------------------------------
+tower-cli credential create -n ${TOWER_CRED_NAME} --credential-type Machine \
+        --organization ${TOWER_ORG_NAME} --team ${TOWER_TEAM_NAME} \
+        --force-on-exists \
+        --inputs 'username: ${TOWER_SSH_USER}
+become_method: sudo
+ssh_key_data: |
+'"$(sed 's/^/    /' ${TOWER_RSA_FILE})"
+------------------------------------------------------------------------
+
+=== Create Git credentials ===
+
+In this example, the SSH private key is protected by a password:
+
+------------------------------------------------------------------------
+tower-cli credential create --credential-type "Source Control" \
+	--name ${TOWER_CRED_NAME} --organization ${TOWER_ORG_NAME} \
+	--force-on-exists \
+	--inputs 'username: ${TOWER_GIT_USER}
+ssh_key_unlock: ${TOWER_RSA_PASSWORD}
+ssh_key_data: |
+'"$(sed 's/^/    /' ${TOWER_RSA_FILE})" 
+------------------------------------------------------------------------
+
+=== Create a custom credential type and the corresponding credential ===
+
+We basically re-create the Tower credentials as a custom one with two mandatory fields that we inject as extra vars:
+
+------------------------------------------------------------------------
+tower-cli credential_type create -n ${TOWER_CRED_TYPE_NAME} \
+        --kind cloud \
+        --inputs '{ "fields": [ { "type": "string", "id": "username", "label": "Username for Tower" }, { "label": "Tower Password", "secret": true, "type": "string", "id": "password" } ], "required": [ "username", "password" ] }' \
+        --injectors '{ "extra_vars": { "tower_cli_user": "{{ username }}", "tower_cli_password": "{{password}}" } }' \
+        --force-on-exists
+------------------------------------------------------------------------
+
+`TOWER_USER_NAME` and `TOWER_USER_PASSWORD` must be replaced by their actual value or you need to use a more complex quoting to make it work:
+
+------------------------------------------------------------------------
+tower-cli credential create \
+        -n ${TOWER_CRED_NAME} --credential-type ${TOWER_CRED_TYPE_NAME} \
+        --organization ${TOWER_ORG_NAME} \
+        --force-on-exists \
+        --inputs '{ "username": "${TOWER_USER_NAME}", "password": "${TOWER_USER_PASSWORD}" }'
+------------------------------------------------------------------------
+
+The team can then be allowed to use the credential:
+
+------------------------------------------------------------------------
+tower-cli role grant --type use --team ${TOWER_TEAM_NAME} \
+	--credential ${TOWER_CRED_NAME}
+------------------------------------------------------------------------
+
+=== Assign a credential to a job template ===
+
+Because we can have more than one credential for each job template, we can add them after the facts:
+
+------------------------------------------------------------------------
+tower-cli job_template associate_credential \
+        --credential ${TOWER_CRED_NAME} \
+        --job-template ${TOWER_JOB_TEMPL_NAME}
+------------------------------------------------------------------------
+
+== Inventories ==
+
+=== Create a custom inventory script ===
+
+------------------------------------------------------------------------
+tower-cli inventory_script create -n ${TOWER_CUSTINV_NAME} \
+        --organization ${TOWER_ORG_NAME} \
+        --script "$(cat ${TOWER_CUSTINV_FILE})" \
+        --force-on-exists
+------------------------------------------------------------------------
+
+=== Create an inventory ===
+
+We create our inventory with some variables valid for all hosts:
+
+------------------------------------------------------------------------
+tower-cli inventory create -n ${TOWER_INV_NAME} \
+        --organization ${TOWER_ORG_NAME} \
+        --force-on-exists \
+        --variables '{ "var1": "value1", "var2": "value2"}'
+------------------------------------------------------------------------
+
+And we give different rights to our team:
+
+------------------------------------------------------------------------
+tower-cli role grant --type use --team ${TOWER_TEAM_NAME} -i ${TOWER_INV_NAME}
+tower-cli role grant --type adhoc --team ${TOWER_TEAM_NAME} -i ${TOWER_INV_NAME}
+tower-cli role grant --type update --team ${TOWER_TEAM_NAME} -i ${TOWER_INV_NAME}
+------------------------------------------------------------------------
+
+=== Create an inventory source ===
+
+The variables here are no Ansible variables but environment variables used to control the custom inventory script we've created beforehand:
+
+------------------------------------------------------------------------
+tower-cli inventory_source create --name ${TOWER_INVSRC_NAME} \
+        --inventory ${TOWER_INV_NAME} \
+        --source custom --source-script ${TOWER_CUSTINV_NAME} \
+        --overwrite true --overwrite-vars true --update-on-launch true \
+        --source-vars '{ "envvar1": "envvalue1", "envvar2": "envvalue2" }'
+        --force-on-exists
+------------------------------------------------------------------------
+
+=== Add manually hosts to an inventory ===
+
+Working with static inventories might not be exactly best practices but it works as well and we can create hosts from the command line:
+
+------------------------------------------------------------------------
+tower-cli host create --name "${TOWER_HOST_NAME}" \
+        --inventory ${TOWER_INV_NAME} \
+        --variables '{ "invvar1": "invvalue1", "invvar2": "invvalue2" }' \
+        --force-on-exists
+------------------------------------------------------------------------
+
+
+== Projects ==
+
+=== Manual project ===
+
+The path to the project is relative to `/var/lib/awx/projects` (and can be used only once in Tower, i.e. no two projects can have the same local path).
+
+------------------------------------------------------------------------
+tower-cli project create -n ${TOWER_PROJ_NAME} \
+        --organization ${TOWER_ORG_NAME} --scm-type manual \
+        --local-path ${TOWER_PROJ_PATH} \
+        --force-on-exists
+------------------------------------------------------------------------
+
+We can then grant access rights to our team:
+
+------------------------------------------------------------------------
+tower-cli role grant --type admin \
+	--team ${TOWER_TEAM_NAME} --project ${TOWER_PROJ_NAME}
+tower-cli role grant --type use \
+	--team ${TOWER_TEAM_NAME} --project ${TOWER_PROJ_NAME}
+tower-cli role grant --type update \
+	--team ${TOWER_TEAM_NAME} --project ${TOWER_PROJ_NAME}
+------------------------------------------------------------------------
+
+=== Git project ===
+
+A Git project is slightly more complicated but also more useful:
+
+------------------------------------------------------------------------
+tower-cli project create --name ${TOWER_PROJ_NAME} \
+	--organization ${TOWER_PROJ_NAME} --scm-type git \
+	--scm-url ${TOWER_GIT_URL} \
+	--scm-update-on-launch True --scm-credential ${TOWER_CRED_NAME} \
+	--monitor \
+	--force-on-exists
+------------------------------------------------------------------------
+
+NOTE: the `monitor` flag allows to sync once the repository and make sure that it works properly, before trying to use it in a job template.
+
+== Job Templates ==
+
+------------------------------------------------------------------------
+tower-cli job_template create -n ${TOWER_JOB_TEMPL_NAME} \
+        -i ${TOWER_INV_NAME} --playbook ${TOWER_PLAYBOOK_NAME} --job-type run \
+        --project ${TOWER_PROJ_NAME} --credential ${TOWER_CRED_NAME} \
+        --ask-limit-on-launch true \
+        --ask-variables-on-launch true \
+        --extra-vars "extravar1: extravalue1" \
+        --extra-vars "extravar2: extravalue2" \
+        --become-enabled False \
+        --force-on-exists
+------------------------------------------------------------------------
+
+Add a survey to a Job Template (the same parameters could have been given during creation):
+
+------------------------------------------------------------------------
+tower-cli job_template modify -n ${TOWER_JOB_TEMPL_NAME} \
+        --survey-spec=@TOWER_SURVEY_SPEC.json --survey-enabled=true
+------------------------------------------------------------------------
+
+NOTE: you can grab the survey specification by creating it via the WebUI and downloading it from the URL: 
+https://${TOWER_URL}/api/v2/job_templates/${TOWER_JOB_TEMPL_ID}/survey_spec/?format=json
+
+We can then grant access rights to our team:
+
+------------------------------------------------------------------------
+tower-cli role grant --type admin \
+	--team ${TOWER_TEAM_NAME} --job-template ${TOWER_JOB_TEMPL_NAME}
+tower-cli role grant --type execute \
+	--team ${TOWER_TEAM_NAME} --job-template ${TOWER_JOB_TEMPL_NAME}
+------------------------------------------------------------------------
+
+=== Create a Job Template with provisioning callback ===
+
+The `ask-variables-on-launch` parameter is required so that extra variables can be given along the URL, else they will be silently ignored:
+
+------------------------------------------------------------------------
+tower-cli job_template create -n ${TOWER_JOB_TEMPL_NAME} \
+        -i ${TOWER_INV_NAME} --playbook ${TOWER_PLAYBOOK_NAME} --job-type run \
+        --project ${TOWER_PROJ_NAME} --credential ${TOWER_CRED_NAME} \
+        --host-config-key ${TOWER_HOST_CONFIG_KEY} \
+        --ask-limit-on-launch false \
+        --ask-variables-on-launch true \
+        --extra-vars "extravar1: extravalue1" \
+        --extra-vars "extravar2: extravalue2" \
+        --force-on-exists
+------------------------------------------------------------------------
+
+NOTE: slightly off-topic but here would be how to call the provisioning callback using curl, while overwriting the `extravar1` variable with a local value: `curl -k -H 'Content-Type: application/json' -XPOST -d '{"host_config_key": "'${TOWER_HOST_CONFIG_KEY}'", "extra_vars": "{\"extravar1\": \"'${TOWER_EXTRA_VAR1}'\"}"}' https://${TOWER_URL}/api/v2/job_templates/${TOWER_JOB_TEMPL_NAME}/callback/`.
+
+== Conclusion ==
+
+There are many more ways to use `tower-cli` but this should get you started. Let us know if you find more ways to use it in a non-obvious way.
