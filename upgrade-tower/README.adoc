@@ -1,0 +1,13 @@
+= Playbook to automate upgrade of Tower =
+Eric Lavarde <elavarde@redhat.com>
+v1.0, 2018-08-01
+
+It's a rather simple playbook to automate the upgrade of a Tower. It's known to have worked from 3.0.2 to 3.2.2, and from 3.2.1 to 3.2.5.
+
+The steps to use it are relatively simple:
+
+. `cp tower-upgrade_vars.example.yml tower-upgrade_vars.local.yml`
+. adapt `tower-upgrade_vars.local.yml` to your needs (check the comments)
+. call the playbook `tower-upgrade.yml`, e.g. with something like `ansible-playbook -i tower.example.com, tower-upgrade.yml -v`
+
+NOTE: the temporary directory isn't cleaned, so you might want to do it once everything looks fine.
