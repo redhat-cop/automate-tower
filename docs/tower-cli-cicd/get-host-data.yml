@@ -1,0 +1,15 @@
+---
+
+  - name: Get host data
+    shell: >
+      tower-cli host get {{ managed_host_id }} --format json
+    register: host_data
+    delegate_to: tower.example.com
+    changed_when: false
+
+  - set_fact:
+      managed_host_data: "{{ host_data.stdout | from_json }}"
+
+  # we capture the variables separately because else they're not structured
+  - set_fact:
+      managed_host_vars: "{{ managed_host_data.variables | from_json }}"

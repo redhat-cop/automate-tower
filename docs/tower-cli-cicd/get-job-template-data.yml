@@ -1,0 +1,15 @@
+---
+- name: Get job_template data of '{{ job_template_name }}'.
+  command: >
+    tower-cli job_template get {{ job_template_name }} --format json
+  register: job_template
+  delegate_to: tower.example.com
+
+- set_fact:
+    job_template_data: "{{ job_template.stdout | from_json }}"
+
+# we separately catch the extra variables because else they're not structured
+# We can use `from_yaml` here because JSON is a YAML (1.2) subset
+- set_fact:
+    job_template_vars: "{{ job_template_data.extra_vars | from_yaml }}"
+

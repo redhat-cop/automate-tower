@@ -1,0 +1,25 @@
+---
+
+- name: Monitor job {{ job_id }} and wait until it's finished
+  command: >
+    tower-cli job monitor {{ job_id }}
+  register: job_monitor
+  delegate_to: tower.example.com
+  failed_when: job_monitor.rc != 0 # or == 0 if the job is expected to fail
+
+- name: Get job output of {{ job_id }}
+  command: >
+    tower-cli job stdout {{ job_id }}
+  register: job_output
+  delegate_to: tower.example.com
+  failed_when: false
+
+# after that, the variable job_output.stdout[_lines] can be parsed for specific messages
+# alternatively you can use the 'shell' module and somehow 'grep' the output
+
+- name: Get job output of {{ job_id }}
+  shell: >
+    tower-cli job stdout {{ job_id }} | grep "{{ job_expected_message }}"
+  register: job_output
+  delegate_to: tower.example.com
+  # it will fail if the message isn't found

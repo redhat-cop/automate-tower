@@ -1,0 +1,20 @@
+---
+
+# this works well if we're only interested in the job result
+
+- name: launch job from job template '{{ job_template_name }}' and wait.
+  command: >
+    tower-cli job launch --no-input --monitor
+    --job-template {{ job_template_name }}
+    --inventory {{ tower_inventory_name }}
+    --limit {{ managed_host_name }}
+    --job-type {{ job_type | default('run') }}
+  register: job_launch
+  delegate_to: tower.example.com
+  failed_when: false # to get better control over the result
+
+# this is a bit constructed to show the usage of assert
+- name: validate that job failed as expected
+  assert:
+    that:
+      - job_launch.rc != 0 # or == 0 if the job is expected to succeed

@@ -1,0 +1,29 @@
+= Tower CLI helpful commands for CI/CD
+Eric Lavarde <elavarde@redhat.com>
+v0.5, 2018-08-08
+:toc:
+
+== Introduction ==
+
+The command line tool https://github.com/ansible/tower-cli[tower-cli] is a simpler way to configure Tower (or AWX) than by programming the API and a more repeatable way than by clicking through the WebUI. It is relatively easy to use and discover using repetitively the `--help` option at each level of the sub-commands, but it can take some time until you've got all options right and it has some quirks here and there as well.
+
+This paper is here to explain how to use tower-cli in the context of a CI/CD chain.
+
+WARNING: tower-cli isn't supported by Red Hat but, as it uses only the official REST API of Tower and doesn't do any "trick", the resulting structures themselves are perfectly valid.
+
+== Generic considerations ==
+
+- we've delegated the tower-cli commands to Tower but tower-cli could also be called locally, accessing remotely the Tower API.
+- we've assumed that the credentials of tower-cli have been entered somehow, see the link:tower-cli-idempotent.adoc#Authentication[Authentication chapter].
+- we've called the Tower `tower.example.com`.
+
+== Snippets ==
+
+Here are some snippets of code that have proven to be useful in the context of testing a Tower setup and especially playbooks and job templates:
+
+- link:tower-cli-cicd/get-host-id.yml[get-host-id]
+- link:tower-cli-cicd/get-host-data.yml[get-host-data]
+- link:tower-cli-cicd/get-job-template-data.yml[get-job-template-data]
+- link:tower-cli-cicd/launch-job-get-id.yml[launch-job-get-id]
+- link:tower-cli-cicd/launch-job-monitor.yml[launch-job-monitor]
+- link:tower-cli-cicd/monitor-job-get-output.yml[monitor-job-get-output]

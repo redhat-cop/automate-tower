@@ -1,0 +1,28 @@
+---
+
+- name: Make sure we can run job '{{ job_template_name }}' in the mode we want
+  command: >-
+    tower-cli job_template modify {{ job_template_name }} --ask-job-type-on-launch true
+  delegate_to: tower.example.com
+
+- name: launch job from job template '{{ job_template_name }}'.
+  command: >
+    tower-cli job launch --no-input
+    --job-template {{ job_template_name }}
+    --inventory {{ tower_inventory_name }}
+    --limit {{ managed_host_name }}
+    --job-type {{ job_type | default('run') }}
+  register: job_launch
+  delegate_to: tower.example.com
+
+- name: join stdout lines to one easy to parse big string
+  set_fact:
+    job_launch_output: "{{ job_launch.stdout_lines | join('LINE') }}"
+
+- name: fail if the job hasn't been properly created
+  assert:
+    that: "'created' in job_launch_output"
+
+- name: extract the job ID from the output
+  set_fact:
+    job_id: "{{ job_launch_output | regex_replace('.*LINE(\\d+).*', '\\1') }}"

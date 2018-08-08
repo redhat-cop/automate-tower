@@ -1,0 +1,22 @@
+---
+
+- set_fact:
+    managed_host_id: "{{ host_list.stdout }}"
+
+- name: Get host ID from name
+  command: >
+    tower-cli host get
+    --inventory {{ tower_inventory_name }}
+    --name '{{ managed_host_name }}'
+    --format id
+  register: host_list
+  delegate_to: tower.example.com
+  changed_when: false
+  failed_when: false
+
+- fail:
+    msg: tower-cli did not find host '{{ managed_host_name }}'
+  when: not (host_list.stdout | match('^\d+$'))
+
+- set_fact:
+    managed_host_id: "{{ host_list.stdout }}"
