@@ -14,7 +14,7 @@ WARNING: tower-cli isn't supported by Red Hat but, as it uses only the official 
 == Generic considerations ==
 
 - we've delegated the tower-cli commands to Tower but tower-cli could also be called locally, accessing remotely the Tower API.
-- we've assumed that the credentials of tower-cli have been entered somehow, see the link:tower-cli-idempotent.adoc#Authentication[Authentication chapter].
+- we've assumed that the credentials of tower-cli have been entered somehow, see the link:tower-cli-idempotent.adoc#authentication[Authentication chapter].
 - we've called the Tower `tower.example.com`.
 
 == Snippets ==
