@@ -1,8 +1,5 @@
 ---
 
-- set_fact:
-    managed_host_id: "{{ host_list.stdout }}"
-
 - name: Get host ID from name
   command: >
     tower-cli host get
