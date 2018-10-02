@@ -1,8 +1,12 @@
 ---
 # tasks file for autocop.tower-setup
 
-- name: create tower_name and tower_url variables to make handling easier
+- name: create tower_name variable to make handling easier
+  set_fact:
     tower_name: "{{ tower_base_name }}.el{{ ansible_distribution_major_version | default('7') }}"
+
+- name: create tower_url variable to make handling easier
+  set_fact:
     tower_url: "{{ tower_base_url }}/{{ tower_name }}.tar.gz"
 
 # --- download and extract the bundle --- #
