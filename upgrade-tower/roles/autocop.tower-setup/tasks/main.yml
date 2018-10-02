@@ -1,0 +1,71 @@
+---
+# tasks file for autocop.tower-setup
+
+- name: create tower_name and tower_url variables to make handling easier
+    tower_name: "{{ tower_base_name }}.el{{ ansible_distribution_major_version | default('7') }}"
+    tower_url: "{{ tower_base_url }}/{{ tower_name }}.tar.gz"
+
+# --- download and extract the bundle --- #
+
+- name: download the tower bundle {{ tower_url }}
+  get_url:
+    url: "{{ tower_url }}"
+    dest: "{{ tower_working_dir }}"
+- name: unpack the downloaded tower bundle to {{ tower_working_dir }}
+  unarchive:
+    remote_src: yes
+    src: "{{ tower_working_dir }}/{{ tower_name }}.tar.gz"
+    dest: "{{ tower_working_dir }}"
+
+# --- identify the correct setup directory --- #
+
+- name: list versioned or existing ansible-tower-setup-bundle directories
+  shell: ls -dv {{ tower_working_dir }}/{{ tower_name | regex_replace('latest','*') }}/
+  register: tower_dirs
+  changed_when: no
+- name: identify the correct tower-setup-bundle directory
+  set_fact:
+    tower_setup_dir: "{{ tower_dirs.stdout_lines[-1] }}"
+
+# --- configure the inventory and possibly upgrade --- #
+
+- name: add necessary tower passwords to inventory file
+  lineinfile:
+    path: "{{ tower_setup_dir }}/inventory"
+    line: "{{ item.key }}='{{ item.value }}'"
+    regexp: "^{{ item.key }}="
+  loop: "{{ tower_passwords | dict2items }}"
+  no_log: true
+
+- name: configure minimum_var_space in file if requested
+  lineinfile:
+    name: "{{ tower_setup_dir }}/inventory"
+    insertafter: "\\[all:vars\\]"
+    line: "minimum_var_space=0"
+    state: "{{ tower_ignore_var_space | ternary('present','absent') }}"
+
+- name: install/upgrade a certain set of packages before starting setup
+  yum:
+    name: "{{ tower_sw_packages }}"
+    state: latest
+    update_cache: yes
+  when: tower_sw_packages
+
+# --- optionally backup Tower and run the installation / upgrade --- #
+
+- name: optionally backup Tower into '{{ tower_backup_dest }}'
+  command: >
+    ./setup.sh -b
+      -e 'backup_dest={{ tower_backup_dest }}'
+      -e 'backup_dir={{ tower_backup_dir }}'
+  args:
+    chdir: "{{ tower_setup_dir }}"
+  when: tower_backup_dest and tower_backup_dir
+  become: true
+
+- name: call setup.sh in '{{ tower_setup_dir }}'
+  command: ./setup.sh
+  args:
+    chdir: "{{ tower_setup_dir }}"
+  register: setup_res
+  become: true
