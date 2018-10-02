@@ -3,6 +3,17 @@ tower-setup
 
 This role allows to remotely setup or upgrade an Ansible Tower server, it has been tested with Tower 3.2 and 3.3 (I suspect that it would work down to Tower 3.0, but there is no guarantee, and why?).
 
+The role should work without any specific variable defined, but you probably want to overwrite the default passwords (see the role variables below), and you can use variables to do such thing as:
+
+- not download the latest version but a specific one
+- grab the tarball from your own web server
+- upgrade certain packages (or not) prior to setup
+- ignore the check on the /var directory
+- create a backup prior to upgrading
+- adapt the working directory
+
+The role can today only be used for a single tower installation with embedded database (i.e. no cluster, no external database).
+
 Requirements
 ------------
 
@@ -31,7 +42,7 @@ Where to download and unpack the bundle file (it will _not_ get removed!)
 
 	tower_working_dir: "/root"
 
-A hash of passwords for Tower, it can be of course overwritten by a vaulted variable
+A hash of passwords for Tower, it can be (and should) of course overwritten by a vaulted variable:
 
 	tower_passwords:
 	  admin_password: changeme
