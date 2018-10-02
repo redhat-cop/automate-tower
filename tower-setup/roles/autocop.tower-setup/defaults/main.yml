@@ -28,6 +28,6 @@ tower_sw_packages:
 
 # if you want to backup Tower prior to upgrade, you need to define those two variables:
 # final destination directory for the backup file
-tower_backup_dest: None
+tower_backup_dest: null
 # temporary directory to create the backup
-tower_backup_dir: None
+tower_backup_dir: null
