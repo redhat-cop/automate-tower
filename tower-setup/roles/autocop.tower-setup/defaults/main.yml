@@ -1,0 +1,33 @@
+---
+# defaults file for autocop.tower-setup
+# which version of Ansible Tower to download and install/upgrade (e.g. 3.2.1-1)
+ansible_tower_version: latest
+
+# the name of the setup bundle and of the extracted directory (without el7)
+tower_base_name: "ansible-tower-setup-bundle-{{ ansible_tower_version }}"
+
+# where to grab the bundle from
+tower_base_url: "https://releases.ansible.com/ansible-tower/setup-bundle"
+
+# where to download and unpack the bundle file (it will _not_ get removed!)
+tower_working_dir: "/root"
+
+# a hash of passwords for Tower, it can be of course overwritten by a vaulted variable
+tower_passwords:
+  admin_password: changeme
+  pg_password: changeme
+  rabbitmq_password: changeme
+
+# set to true if you want to skip on disk space in /var (at your own risk)
+tower_ignore_var_space: false
+
+# list of software packages to install or upgrade before installing / upgrading Tower
+tower_sw_packages:
+  - ansible
+  - python2-ansible-tower-cli
+
+# if you want to backup Tower prior to upgrade, you need to define those two variables:
+# final destination directory for the backup file
+tower_backup_dest: null
+# temporary directory to create the backup
+tower_backup_dir: null

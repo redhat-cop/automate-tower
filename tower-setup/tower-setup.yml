@@ -1,0 +1,6 @@
+---
+- name: "upgrade or install Ansible Tower 3.x"
+  hosts: tower_servers
+  gather_facts: true
+  roles:
+    - { role: autocop.tower-setup }

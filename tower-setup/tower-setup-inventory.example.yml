@@ -1,0 +1,11 @@
+all:
+  children:
+    tower_servers:
+      hosts:
+        tower.example.com:
+      vars:
+        ansible_user: root
+        tower_passwords:
+          admin_password: myownpassword
+          pg_password: myownpassword
+          rabbitmq_password: myownpassword

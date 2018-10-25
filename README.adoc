@@ -3,4 +3,4 @@
 This repository will contain code to automate Tower itself, we'll automate the automation.
 
 - link:docs/[Documentation]
-- link:upgrade-tower/[simple playbook to automatically upgrade Ansible Tower]
+- link:tower-setup/[simple role with example playbook to automatically install or upgrade Ansible Tower]

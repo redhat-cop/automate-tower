@@ -1,0 +1,5 @@
+---
+# handlers file for autocop.tower-setup
+- name: restart_tower
+  command: ansible-tower-service restart
+  become: true
