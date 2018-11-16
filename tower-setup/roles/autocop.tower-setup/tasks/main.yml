@@ -15,6 +15,7 @@
   get_url:
     url: "{{ tower_url }}"
     dest: "{{ tower_working_dir }}"
+    checksum: "{{ tower_bundle_checksum }}"
 - name: unpack the downloaded tower bundle to {{ tower_working_dir }}
   unarchive:
     remote_src: yes

@@ -3,6 +3,15 @@
 # which version of Ansible Tower to download and install/upgrade (e.g. 3.2.1-1)
 ansible_tower_version: latest
 
+# checksum of the tower bundle
+# in your vars file, either supply an algo and a URL of the checksums file
+# or an algo and a checksum
+# tower_bundle_checksum: "sha256:http://example.com/path/sha256sum.txt"
+# tower_bundle_checksum: "sha256:D98291AC[...]B6DC7B97"
+# see 'ansible-doc get_url" for details
+# needs fixing of https://github.com/ansible/ansible/issues/48790 first though
+tower_bundle_checksum: "sha256:https://releases.ansible.com/ansible-tower/setup-bundle/ansible-tower-setup-bundle-CHECKSUM"
+
 # the name of the setup bundle and of the extracted directory (without el7)
 tower_base_name: "ansible-tower-setup-bundle-{{ ansible_tower_version }}"
 
