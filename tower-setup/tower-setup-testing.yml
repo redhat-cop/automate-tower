@@ -1,6 +1,6 @@
 ---
 - name: "upgrade or install Ansible Tower 3.x"
-  hosts: guest23.internal.pcfe.net
+  hosts: rhel8-beta.internal.pcfe.net
   gather_facts: true
   become: true
   vars:
@@ -10,5 +10,10 @@
     ansible_tower_version: "3.3.1-1"
     tower_bundle_checksum: "sha256:de70ffd69528ec8884797bfb7e833948659e6ba3fa1486d7747400cc08f60bbe"
     tower_working_dir: "/root/tmp/"
+  tasks:
+    - name: "ensure {{ tower_working_dir }} exists"
+      file:
+        dest: "{{ tower_working_dir }}"
+        state: directory
   roles:
     - { role: autocop.tower-setup }
