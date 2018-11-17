@@ -1,0 +1,14 @@
+---
+- name: "upgrade or install Ansible Tower 3.x"
+  hosts: guest23.internal.pcfe.net
+  gather_facts: true
+  become: true
+  vars:
+    # https://www.ansible.com/blog/integrating-ansible-and-red-hat-enterprise-linux-8-beta
+    ansible_python_interpreter: /usr/libexec/platform-python
+    # while testing
+    ansible_tower_version: "3.3.1-1"
+    tower_bundle_checksum: "sha256:de70ffd69528ec8884797bfb7e833948659e6ba3fa1486d7747400cc08f60bbe"
+    tower_working_dir: "/root/tmp/"
+  roles:
+    - { role: autocop.tower-setup }
