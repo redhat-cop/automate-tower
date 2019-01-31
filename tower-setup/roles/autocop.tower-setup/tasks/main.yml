@@ -24,7 +24,7 @@
 # --- identify the correct setup directory --- #
 
 - name: list versioned or existing ansible-tower-setup-bundle directories
-  shell: ls -dv {{ tower_working_dir }}/{{ tower_name | regex_replace('latest','*') }}/
+  shell: ls -dv1 {{ tower_working_dir }}/{{ tower_name | regex_replace('latest','*') }}/
   register: tower_dirs
   changed_when: no
 - name: identify the correct tower-setup-bundle directory
