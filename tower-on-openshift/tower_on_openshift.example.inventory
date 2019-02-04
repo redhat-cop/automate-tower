@@ -1,0 +1,14 @@
+[all]
+# we assume SSH key has been copied and is ssh-added...
+tower-ocp.ewl.example.com ansible_user=root
+
+[all:vars]
+
+rhsm_pool_pattern="^Employee SKU$"
+# rhsm_pool_id: any pool id as alternative to rhsm_pool_pattern
+oc_tar_source=~/Downloads/oc-3.11.59-linux.tar.gz
+
+tower_version=3.4.1
+tower_extract_dir=/root
+# db_type can be intern, extern or empty
+db_type=intern
