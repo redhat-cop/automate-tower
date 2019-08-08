@@ -27,6 +27,7 @@
   shell: ls -dv1 {{ tower_working_dir }}/{{ tower_name | regex_replace('latest','*') }}/
   register: tower_dirs
   changed_when: no
+  check_mode: no  # run also in check mode to get list of files in all cases
 - name: identify the correct tower-setup-bundle directory
   set_fact:
     tower_setup_dir: "{{ tower_dirs.stdout_lines[-1] }}"
@@ -53,7 +54,7 @@
     name: "{{ tower_sw_packages }}"
     state: latest
     update_cache: yes
-  when: tower_sw_packages
+  when: tower_sw_packages | bool
 
 # --- optionally backup Tower and run the installation / upgrade --- #
 

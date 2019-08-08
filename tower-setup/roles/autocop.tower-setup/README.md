@@ -12,7 +12,9 @@ The role should work without any specific variable defined, but you probably wan
 - create a backup prior to upgrading
 - adapt the working directory
 
-The role can today only be used for a single tower installation with embedded database (i.e. no cluster, no external database).
+The role can today only be used for a single tower installation with embedded database (i.e. no cluster, no external database). It is mostly idempotent as long as the setup.sh of Tower installation is (which it is today), even if the preparation steps might show some changed tasks (unpacking the tarball and patching the inventory).
+
+The role works ok in check mode (as long as a setup directory has been unpacked).
 
 Requirements
 ------------

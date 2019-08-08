@@ -1,8 +1,8 @@
 = Playbook to automate upgrade of Tower =
 Eric Lavarde <elavarde@redhat.com>
-v1.1, 2018-10-02
+v1.2, 2019-08-08
 
-It's a rather simple role to automate the upgrade of a Tower. It changed slightly over time but is known to have worked from 3.0.2 to 3.2.2, and from 3.2.1 to 3.2.5 to 3.3.0, and then up to 3.3.4.
+It's a rather simple role to automate the upgrade of a Tower. It changed slightly over time but is known to have worked from 3.0.2 to 3.2.2, and from 3.2.1 to 3.2.5 to 3.3.0, and then up to 3.3.4, 3.4.2 and 3.5.1.
 
 The steps to use it are relatively simple:
 
