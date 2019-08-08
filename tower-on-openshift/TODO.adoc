@@ -1,0 +1,5 @@
+- automate oc completion to /etc/profile.d/oc.sh
+- automate the provisioning and the VM
+- make the whole thing less specific to my environment
+- replace oc client command with k8s module
+- make the setup persistent e.g. with https://github.com/openshift-evangelists/oc-cluster-wrapper

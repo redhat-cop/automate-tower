@@ -1,0 +1,144 @@
+- name: prepare everything for oc cluster up
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+  - name: register with subscription manager and attach pool
+    redhat_subscription:
+      username: "{{ rhsm_username }}"
+      password: "{{ rhsm_password }}"
+      pool: "{{ rhsm_pool_pattern | default(omit) }}"
+      pool_id: "{{ rhsm_pool_id | default(omit) }}"
+      state: present
+    tags: subscribe
+  - name: enable the necessary repositories
+    command: >
+      subscription-manager repos --disable=*
+      --enable=rhel-7-server-rpms
+      --enable=rhel-7-server-extras-rpms
+    tags: subscribe
+  - name: update all software to latest version
+    yum:
+      name: '*'
+      state: latest
+    tags: install
+  - name: install Docker and Python packages
+    yum:
+      name:
+      - docker
+      - docker-python
+      state: present
+    tags: install
+  - name: add internal registry as insecure to docker
+    copy:
+      dest: /etc/docker/daemon.json
+      content: '{ "insecure-registries": ["172.30.0.0/16"] }'
+    notify: restart_docker_service
+  - name: start and enable the docker service
+    service:
+      name: docker
+      state: started
+      enabled: true
+  - name: copy and extract the oc command line tool (already downloaded)
+    unarchive:
+      creates: /usr/local/bin/oc
+      mode: a+rx
+      src: "{{ oc_tar_source }}"
+      dest: /usr/local/bin
+  - name: grab facts about the bridge docker network
+    docker_network:
+      name: bridge
+    register: docker_bridge_network
+    check_mode: true # we don't want to create it, just to gather facts
+  - name: output Docker bridge network subnet assuming there is only one of it
+    debug:
+      var: docker_bridge_network.ansible_facts.docker_network.IPAM.Config.0.Subnet
+      verbosity: 1
+  - name: setup the necessary firewall rules for Docker and OpenShift
+    firewalld:
+      zone: dockerc
+      state: "{{ item.state | default('enabled') }}"
+      source: "{{ item.source | default(omit) }}"
+      port: "{{ item.port | default(omit) }}"
+      permanent: yes
+    loop:
+      - state: present
+      - source: "{{ docker_bridge_network.ansible_facts.docker_network.IPAM.Config.0.Subnet }}"
+      - port: 8443/tcp
+      - port: 53/udp
+      - port: 8053/udp
+    notify: reload_firewalld  # FIXME: didn't test if it really works as expected
+
+  handlers:
+
+  - name: restart_docker_service
+    service:
+      name: docker
+      state: restarted
+  - name: reload_firewalld
+    command: firewall-cmd --reload
+
+- name: tell user to call oc cluster up
+  hosts: all
+  become: false
+  gather_facts: false
+  tasks:
+  - name: tell what to do next...
+    debug:
+      msg: >
+        Call `docker login https://registry.redhat.io`.
+        Be in a directory which can contain some data
+        and call `oc cluster up --public-hostname=$(hostname -f) 
+        --routing-suffix=$( dig +short $(hostname -f) ).nip.io`.
+    tags: message
+
+- name: prepare installation of tower
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+  - name: create a few variables to download and extract Tower
+    set_fact:
+      tower_download_url: https://releases.ansible.com/ansible-tower/setup_openshift/ansible-tower-openshift-setup-{{ tower_version }}.tar.gz
+      tower_setup_dir: "{{ tower_extract_dir }}/ansible-tower-openshift-setup-{{ tower_version }}"
+  - name: download and extract Tower for OpenShift
+    unarchive:
+      remote_src: true
+      src: "{{ tower_download_url }}"
+      dest: "{{ tower_extract_dir }}"
+      creates: "{{ tower_setup_dir }}"
+  - name: copy Tower on OpenShift inventory - don't forget to adapt
+    template:
+      src: tower.inventory.j2
+      dest: "{{ tower_setup_dir }}/inventory"
+      backup: true  # making sure we can compare with original inventory
+  - name: allow HTTPS port for connection to Tower on default zone
+    firewalld:
+      state: enabled
+      service: https
+      permanent: true
+
+  - name: create persistent volume claim for internal PostgreSQL
+    block:
+    - name: copy PVC definition for internal PostgreSQL
+      copy:
+        src: postgresql-pvc.yml
+        dest: "{{ tower_extract_dir }}"
+    - name: create PVC from definition file (won't update existing one)
+      command: oc create -f {{ tower_extract_dir }}/postgresql-pvc.yml
+      register: oc_create_ret
+      failed_when:
+      - oc_create_ret.rc != 0
+      - '"(AlreadyExists)" not in oc_create_ret.stderr'
+      changed_when:
+      - oc_create_ret.rc == 0
+    when: db_type == 'intern'
+
+  - name: tell about the external PostgreSQL database if relevant
+    debug:
+      msg: Make sure your external PostgreSQL server is ready and the access data available
+    when: db_type == 'extern'
+
+  - name: tell how to continue with Tower installation
+    debug:
+      msg: Go to `{{ tower_setup_dir }}`, adapt the `inventory` file and call `./setup_openshift.sh`.

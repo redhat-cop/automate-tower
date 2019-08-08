@@ -1,0 +1,166 @@
+= Install Ansible Tower on OpenShift
+
+== Pre-requisites
+
+- Ansible
+- python3-docker on the control host
+- RHEL 7 image downloaded e.g. to /var/lib/libvirt/images/rhel-server-7.5-x86_64-dvd.iso
+
+== Create a fitting VM
+
+Have a look at memory and vCPUs (see below considerations):
+
+------------------------------------------------------------------------
+virt-install \
+	--name tower_on_openshift \
+	--os-variant rhel7 \
+	--initrd-inject=/home/elavarde/Documents/Work/Ansible/tower_on_openshift.ks \
+	--location /var/lib/libvirt/images/rhel-server-7.5-x86_64-dvd.iso \
+	--extra-args "ks=file:/tower_on_openshift.ks" \
+	--ram 8192 \
+	--disk pool=default,boot_order=1,format=qcow2,bus=virtio,discard=unmap,sparse=yes,size=10 \
+	--disk pool=default,boot_order=2,format=qcow2,bus=virtio,discard=unmap,sparse=yes,size=50 \
+	--controller scsi,model=virtio-scsi \
+	--rng /dev/random \
+	--vcpus 3 \
+	--cpu host \
+	--accelerate \
+	--network network=default,model=virtio
+#	--extra-args "ks=file:/tower_on_openshift.ks console=ttyS0,115200" \
+#	--nographics \
+#	--boot useserial=on \
+------------------------------------------------------------------------
+
+FIXME: first step with only one disk of 60GB to avoid having to fiddle with the 2nd disk for now...
+
+WAIT...
+
+In the meantime, download the Linux OpenShift client from https://access.redhat.com/downloads/content/290 e.g. oc-3.11.59-linux.tar.gz
+
+When finished:
+
+. enter hostname/IP address into /etc/hosts on the control host
+. clean-up `.ssh/known_hosts`
+. ssh-copy-id a key which you've also ssh-add'ed (there are other ways to address this but let's keep it simple)
+. copy `tower_on_openshift.example.inventory` to `tower_on_openshift.local.inventory` and adapt to your needs.
+. call the following command:
++
+------------------------------------------------------------------------
+ansible-playbook -i tower_on_openshift.local.inventory tower_on_openshift.yml \
+	-e 'rhsm_username=YOUR_RHSM_USER' \
+	-e 'rhsm_password=YOUR_RHSM_PASSWORD'`
+------------------------------------------------------------------------
++
+. Follow the instructions from the playbook as what to do next (basically call `oc cluster up` to start the OpenShift cluster, followed by `./setup_openshift.sh` to install Tower.
+
+== Manual steps
+
+CAUTION: The following lines are probably not needed anymore as they were describing the manual steps, now replaced almost completely by the playbook. Certain steps might still be of interest though (e.g. how to create a fitting "external" PostgreSQL pod in OpenShift).
+
+=== Install OpenShift as one node cluster
+
+LOG IN as root/redhat
+
+subscription-manager register # enter CDN user and password
+subscription-manager list --available | less # search for Employee SKU, note pool-id
+subscription-manager attach --pool=8a85f9833e1404a9013e3cddf99305e6
+
+yum repolist # rhel-7-server-rpms only...
+subscription-manager repos --enable=rhel-7-server-extras-rpms # for Docker
+yum -y update # wait for 265 packages to be installed...
+
+yum -y install docker
+
+scp oc-3.11.59-linux.tar.gz root@192.168.122.226:/tmp
+cd /usr/local/bin
+tar xvzf /tmp/oc-3.11.59-linux.tar.gz # oc binary should be executable!
+
+# check https://github.com/openshift/origin/blob/release-3.11/docs/cluster_up_down.md
+
+echo '{ "insecure-registries": ["172.30.0.0/16"] }' > /etc/docker/daemon.json
+
+systemctl start docker && systemctl enable docker
+
+iprange=$(docker network inspect -f "{{range .IPAM.Config }}{{ .Subnet }}{{end}}" bridge)
+firewall-cmd --permanent --new-zone dockerc
+firewall-cmd --permanent --zone dockerc --add-source ${iprange}
+firewall-cmd --permanent --zone dockerc --add-port 8443/tcp
+firewall-cmd --permanent --zone dockerc --add-port 53/udp
+firewall-cmd --permanent --zone dockerc --add-port 8053/udp
+firewall-cmd --reload
+
+pvcreate /dev/vdb
+vgcreate vgvols /dev/vdb
+lvcreate --name lvvols --size 20G vgvols
+mkfs.ext4 -L VOLSFS /dev/mapper/vgvols-lvvols
+mount /dev/mapper/vgvols-lvvols /srv
+# --host-pv-dir doesn't exist anymore !? neither --host-data-dir
+# hence we just add the disk to the VG/LV already existing...
+pvcreate /dev/vdb
+vgextend vg1 /dev/vdb
+lvextend -r -l100%VG /dev/vg1/root
+# FIXME we can have it easier... See note with virt-install about only one disk
+
+# following https://access.redhat.com/RegistryAuthentication
+docker login https://registry.redhat.io # enter your RHN credentials -> Login Succeeded
+cat ~/.docker/config.json # contains an auth token from registry.redhat.io
+
+# make sure you are in a directory you don't mind being filled...
+oc cluster up \
+	--public-hostname=tower-ocp.ewl.example.com \
+	--routing-suffix=192.168.122.226.nip.io # the IP address of the VM
+
+WAIT...
+
+# give the admin user cluster-admin rights...
+oc login -u system:admin
+oc adm policy add-cluster-role-to-user cluster-admin admin
+
+=== Install PostgreSQL
+
+- connect to the UI as developer https://tower-ocp.ewl.example.com:8443/console/
+- select the myproject project
+- add a PostgreSQL 9.6 DB to the project
+* Memory Limit: 512Mi (default)
+* Namespace: openshift (default)
+* Database Service Name: pgawx
+* PG Connection Username: awx
+* PG Connection Password: pgredhat
+* PG Database Name: awx
+* Volume Capacity: 10Gi
+* Version of PG Image: 9.6
+* Result: Username: awx Password: pgredhat Database Name: awxdb Connection URL: postgresql://pgawx:5432/
+
+=== Install Ansible Tower
+
+Reference:: https://docs.ansible.com/ansible-tower/latest/html/administration/openshift_configuration.html
+
+cd
+wget https://releases.ansible.com/ansible-tower/setup_openshift/ansible-tower-openshift-setup-3.4.0.tar.gz
+tar xvzf ansible-tower-openshift-setup-3.4.0.tar.gz
+cd ansible-tower-openshift-setup-3.4.0
+
+Edit the inventory file as in tower.inventory:
+
+- `openshift_host=https://tower-ocp.ewl.example.com:8443` - the port is important or 443 will be used!
+- `openshift_skip_tls_verify=true` because our setup is only for test or else __"error: The server is using a certificate that does not match its hostname: x509: certificate is valid for *.router.default.svc.cluster.local, router.default.svc.cluster.local, not localhost"__.
+- increase for customer requirements (or decrease here for test setups):
+* `task_cpu_request=1500` is the default sufficient for 6 simultaneous forks (1000 should be sufficient for 4 forks)
+* `task_mem_request=2` is the default sufficient for 20 simultaneous forks (1 should be sufficient for 10 forks)
+
+
+
+4 vCPUs are required using the defaults because we also need some space for PostgreSQL on top of the required 3 vCPUs:
+
+# oc describe pod ansible-tower-0 | grep -e cpu -e memory
+      cpu:     500m
+      memory:  1Gi
+      cpu:     1500m
+      memory:  2Gi
+      cpu:      500m
+      memory:   2Gi
+      cpu:        500m
+      memory:     1Gi
+Tolerations:     node.kubernetes.io/memory-pressure:NoSchedule
+  Warning  FailedScheduling  3m (x212 over 38m)  default-scheduler  0/1 nodes are available: 1 Insufficient cpu.
+
